@@ -1,8 +1,11 @@
 
 include("common.jscad");
 include("screws.jscad");
+include("lattice.jscad");
+include("plate.jscad");
 
 var tol = 0.5;
+var wallThickness = 2.0;
 
 function getParameterDefinitions()
 {
@@ -13,7 +16,6 @@ function getParameterDefinitions()
 
 function main(params)
 {
-    var wallThickness = 10;
     var bodyDiameter = 40;
     var output = [];
 
@@ -28,18 +30,27 @@ function main(params)
         output.push(makeAxis(extents));
     }
 
-    var cyl = CSG.cylinder({
-            start: [0, 0, 0],
-            end:   [0, 0, wallThickness / 2],
-            radius: bodyDiameter / 2
-        });
+    //var cyl = CSG.cylinder({
+    //        start: [0, 0, 0],
+    //        end:   [0, 0, wallThickness / 2],
+    //        radius: bodyDiameter / 2
+    //    });
+    //
+    //cyl = cyl
+    //        .subtract(washerM6.hole().translate([0,0,wallThickness/2-washerM6.height]))
+    //        .subtract(nutM6.hole().translate([10,10,wallThickness/2-nutM6.height]))
+    //        .subtract(washerM6.recess().translate([-10,-10,wallThickness/2-washerM6.getRecessHeight()]))
 
-    cyl = cyl
-            .subtract(washerM6.hole().translate([0,0,wallThickness/2-washerM6.height]))
-            .subtract(nutM6.hole().translate([10,10,wallThickness/2-nutM6.height]))
-            .subtract(washerM6.recess().translate([-10,-10,wallThickness/2-washerM6.recessHeight]))
+    //output.push(cyl);
 
-    output.push(cyl);
+    var plateArgs = {
+        rad: (washerM6.diameter - screwM6.type.fit.free),
+        mountingHoleDiameter: screwM6.type.fit.close,
+        plateThickness: wallThickness,
+        cutMountingHoles: true,
+        cutCenterHole: false
+    }
+    output.push(plate(plateArgs));
 
     return output;
 }
