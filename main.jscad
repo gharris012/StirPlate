@@ -7,6 +7,8 @@ include("plate.jscad");
 var tol = 0.5;
 var wallThickness = 2.0;
 
+var sparSpace;
+
 function getParameterDefinitions()
 {
   return [
@@ -44,13 +46,36 @@ function main(params)
     //output.push(cyl);
 
     var plateArgs = {
-        rad: (washerM6.diameter - screwM6.type.fit.free),
+        rad: (washerM6.diameter / 2.0),
         mountingHoleDiameter: screwM6.type.fit.close,
         plateThickness: wallThickness,
+        latticeAngle: 32.5,   // center motor mount on lattice spars
+        latticeCount: 3,      // center motor mount on lattice spars
+        latticeXOffset: -2.5, // center motor mount on lattice spars
         cutMountingHoles: true,
         cutCenterHole: false
     }
-    output.push(plate(plateArgs));
+
+    var stirPlate = plate(plateArgs);
+    //output.push(stirPlate);
+
+    var motorDiameter = 30;
+    var motorSpindleDiameter = 10;
+    var motorMountDiameter = Math.min(motorDiameter, sparSpace / 2);
+    var screwM25 = new screw("M2.5");
+
+    var motorMount = CSG.cylinder({
+            start: [0, 0, 0],
+            end:   [0, 0, wallThickness],
+            radius: ( motorMountDiameter / 2 ) + 1
+        }).subtract(CSG.cylinder({
+            start: [0, 0, 0],
+            end:   [0, 0, wallThickness],
+            radius: ( ( motorSpindleDiameter + tol ) / 2 )
+        })).subtract(screwM25.hole().translate([8,0,0]))
+           .subtract(screwM25.hole().translate([-8,0,0]));
+
+    output.push(motorMount.union(stirPlate));
 
     return output;
 }

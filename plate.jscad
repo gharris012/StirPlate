@@ -9,6 +9,11 @@ plate = function (args)
     var rad = args && args.rad || ( ( mountingHoleDiameter / 2 ) + walls );
     var cutMountingHoles = args && typeof(args.cutMountingHoles) != 'undefined' ? args.cutMountingHoles : true;
     var cutCenterHole = args && typeof(args.cutCenterHole) != 'undefined' ? args.cutCenterHole : true;
+    var latticeAngle = args && args.latticeAngle || 30;
+    var latticeCount = args && args.latticeCount || 3;
+    var latticeSize = args && args.latticeSize || 2;
+    var latticeXOffset = args && args.latticeXOffset || 0;
+    var latticeYOffset = args && args.latticeYOffset || 0;
 
     var holeOffset = plateSize / 2;
 
@@ -18,7 +23,7 @@ plate = function (args)
                     radius: [holeOffset-rad,holeOffset-rad,plateThickness / 2]
                   });
     */
-    var plate = lattice(plateSize-(rad * 2), plateSize-(rad * 2), 2, wallThickness, 30, 3)
+    var plate = lattice(plateSize-(rad*2), plateSize-(rad*2), latticeSize, wallThickness, latticeAngle, latticeCount, latticeXOffset, latticeYOffset)
                 .translate([-(plateSize-(rad * 2))/2, -(plateSize-(rad * 2))/2, 0]);
 
     if ( cutCenterHole )
@@ -53,7 +58,7 @@ plate = function (args)
         .translate([-rad,-rad,0])
         .setColor([0,0,255,0.25]);
 
-    var cutoutSize = plateSize+(plateSize);
+    var cutoutSize = (plateSize*2)-(rad*3); // this needs some real math
     var cutout = cylinder({d: cutoutSize,
                           h: plateThickness*2,
                           center: [true, true, false]})
@@ -66,6 +71,9 @@ plate = function (args)
     shape = shape.subtract(cutout);
     cutout = cutout.rotateZ(90);
     shape = shape.subtract(cutout);
+
+    //cutout = cutout.rotateZ(90);
+    //shape = shape.union(cutout);
 
     plate = plate.union(shape);
 
