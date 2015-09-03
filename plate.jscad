@@ -4,11 +4,12 @@ plate = function (args)
     var tolerance = typeof tol != 'undefined' && tol || 0.5;
     var plateThickness = args && args.plateThickness || 3.0;
     var plateSize = args && args.plateSize || 90;
-    var centerHoleDiameter = args && args.centerHoleDiameter || 50;
     var mountingHoleDiameter = args && args.mountingHoleDiameter || 10;
     var rad = args && args.rad || ( ( mountingHoleDiameter / 2 ) + walls );
+    // instead of doing real math, trial and error!
+    var radMultiplier = args && args.radMultiplier || 3;
     var cutMountingHoles = args && typeof(args.cutMountingHoles) != 'undefined' ? args.cutMountingHoles : true;
-    var cutCenterHole = args && typeof(args.cutCenterHole) != 'undefined' ? args.cutCenterHole : true;
+    var plateStyle = args && args.style || 'lattice';
     var latticeAngle = args && args.latticeAngle || 30;
     var latticeCount = args && args.latticeCount || 3;
     var latticeSize = args && args.latticeSize || 2;
@@ -17,20 +18,22 @@ plate = function (args)
 
     var holeOffset = plateSize / 2;
 
-    /*
-    var plate = CSG.cube({                  // rounded cube
-                    center: [0,0,plateThickness / 2],
-                    radius: [holeOffset-rad,holeOffset-rad,plateThickness / 2]
-                  });
-    */
-    var plate = lattice(plateSize-(rad*2), plateSize-(rad*2), latticeSize, wallThickness, latticeAngle, latticeCount, latticeXOffset, latticeYOffset)
-                .translate([-(plateSize-(rad * 2))/2, -(plateSize-(rad * 2))/2, 0]);
+    // sets this as a global variable for external reference
+    plateHoleOffset = holeOffset;
 
-    if ( cutCenterHole )
+    var plate;
+
+    if ( plateStyle == 'solid' )
     {
-        plate = plate.subtract(cylinder({d: centerHoleDiameter,
-                                         h:plateThickness + 5,
-                                         center: true}));
+        plate = CSG.cube({                  // rounded cube
+                        center: [0,0,plateThickness / 2],
+                        radius: [holeOffset-rad,holeOffset-rad,plateThickness / 2]
+                      });
+    }
+    else
+    {
+        plate = lattice(plateSize-(rad*2), plateSize-(rad*2), latticeSize, wallThickness, latticeAngle, latticeCount, latticeXOffset, latticeYOffset)
+                    .translate([-(plateSize-(rad * 2))/2, -(plateSize-(rad * 2))/2, 0]);
     }
 
     var b = [];
@@ -58,7 +61,7 @@ plate = function (args)
         .translate([-rad,-rad,0])
         .setColor([0,0,255,0.25]);
 
-    var cutoutSize = (plateSize*2)-(rad*3); // this needs some real math
+    var cutoutSize = (plateSize*2)-(rad*radMultiplier); // this needs some real math
     var cutout = cylinder({d: cutoutSize,
                           h: plateThickness*2,
                           center: [true, true, false]})
