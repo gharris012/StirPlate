@@ -6,7 +6,6 @@ include("plate.jscad");
 
 var tol = 0.5;
 var wallThickness = 2.0;
-var plateThickness = 2.0;
 
 var sparSpace;
 var plateHoleOffset;
@@ -15,7 +14,7 @@ function getParameterDefinitions()
 {
   return [
     { name: 'showReferences', type: 'choice', values: ["yes", "no"], initial: "yes", caption: "Show References?" },
-    { name: 'plateType', type: 'choice', values: ["top","middle","bottom"], initial: "top", caption: "Plate Type" }
+    { name: 'plateType', type: 'choice', values: ["top","middle","bottom"], initial: "middle", caption: "Plate Type" }
   ];
 }
 
@@ -27,6 +26,7 @@ function main(params)
     var screw14 = new screw("1/4-20", {head: "pan-square"});
     var nut14 = new nut("1/4-20", {screw: screw14});
     var washerM6 = new washer("M6", {screw: screw14}); // just use M6 washers for now
+    var plateThickness = 3.0;
 
     // Axis
     if ( params.showReferences === 'yes' )
@@ -35,27 +35,43 @@ function main(params)
         output.push(makeAxis(extents));
     }
 
-    var rads = {
-        top: washerM6.diameter + (wallThickness * 2),
-        middle: washerM6.diameter,
-        bottom: nut14.diameter + wallThickness
+    if ( params.plateType == "top" )
+    {
+        var plateArgs = {
+            rad: ( screw14.type.head[screw14.head].diameter + (wallThickness * 2) ) / 2.0,
+            radMultiplier: 6,
+            mountingHoleDiameter: screw14.type.fit.close,
+            plateThickness: plateThickness,
+            style: 'solid',
+            latticeAngle: 45,
+            latticeCount: 4,
+            cutMountingHoles: false,
+        }
     }
-    var radMult = {
-        top: 6,
-        middle: 1,
-        bottom: 5
+    else if ( params.plateType == "middle" )
+    {
+        var plateArgs = {
+            rad: ( screw14.type.head[screw14.head].diameter / 2.0),
+            radMultiplier: 1,
+            mountingHoleDiameter: screw14.type.fit.free,
+            plateThickness: plateThickness,
+            style: 'lattice',
+            latticeAngle: 33.5,
+            latticeCount: 3,
+            latticeXOffset: -1.20,
+            cutMountingHoles: true,
+        }
     }
-
-    var plateArgs = {
-        rad: ( rads[params.plateType] / 2.0),
-        radMultiplier: radMult[params.plateType],
-        mountingHoleDiameter: screw14.type.fit.close,
-        plateThickness: plateThickness,
-        style: 'lattice',
-        latticeAngle: 32.5,   // center motor mount on lattice spars
-        latticeCount: 3,      // center motor mount on lattice spars
-        latticeXOffset: -2.5, // center motor mount on lattice spars
-        cutMountingHoles: ( params.plateType == "middle" ? true : false ),
+    else if ( params.plateType == "bottom" )
+    {
+        var plateArgs = {
+            rad: ( nut14.diameter + (wallThickness * 2) ) / 2.0,
+            radMultiplier: 6,
+            mountingHoleDiameter: screw14.type.fit.close,
+            plateThickness: plateThickness,
+            style: 'solid',
+            cutMountingHoles: false,
+        }
     }
 
     var stirPlate = plate(plateArgs);
@@ -64,29 +80,32 @@ function main(params)
     {
         var motorDiameter = 30;
         var motorSpindleDiameter = 10;
-        var motorMountDiameter = Math.min(motorDiameter, sparSpace / 2);
+        var motorScrewDistance = 8;
+        var motorMountDiameter = Math.max((motorScrewDistance + wallThickness) * 2, sparSpace / 2);
         var screwM25 = new screw("M2.5");
 
         var motorMount = CSG.cylinder({
                 start: [0, 0, 0],
                 end:   [0, 0, plateThickness],
                 radius: ( motorMountDiameter / 2 ) + 1
-            }).subtract(CSG.cylinder({
-                start: [0, 0, 0],
-                end:   [0, 0, plateThickness],
-                radius: ( ( motorSpindleDiameter + tol ) / 2 )
-            })).subtract(screwM25.hole().translate([8,0,0]))
-               .subtract(screwM25.hole().translate([-8,0,0]));
-        stirPlate = stirPlate.union(motorMount);
+            });
+        stirPlate = stirPlate.union(motorMount)
+                             .subtract(CSG.cylinder({
+                                    start: [0, 0, 0],
+                                    end:   [0, 0, plateThickness],
+                                    radius: ( ( motorSpindleDiameter + tol ) / 2 )
+                                }))
+                             .subtract(screwM25.hole({length:plateThickness}).translate([motorScrewDistance,0,0]))
+                             .subtract(screwM25.hole({length:plateThickness}).translate([-motorScrewDistance,0,0]));
     }
     else if ( params.plateType == "top" )
     {
-        var centerHoleDiameter = 50;
+        var centerHoleDiameter = 52;
         stirPlate = stirPlate.union(cylinder({d: centerHoleDiameter + ( wallThickness * 3 ),
                                                  h: plateThickness,
                                                  center: false}));
-        stirPlate = stirPlate.subtract(cylinder({d: centerHoleDiameter,
-                                                 h: plateThickness + 5,
+        stirPlate = stirPlate.subtract(cylinder({d: centerHoleDiameter + (tol*2),
+                                                 h: plateThickness * 2.5,
                                                  center: true}));
 
         var mountingPostHeight = screw14.type.head[screw14.head].height + wallThickness - plateThickness;
@@ -124,14 +143,25 @@ function main(params)
     {
         nut14.screw.length = nut14.height + wallThickness;
         var nutInsert = nut14.insert().translate([plateHoleOffset, plateHoleOffset, wallThickness]);
-        nutInsert = nutInsert.subtract(nut14.insertHole().translate([plateHoleOffset, plateHoleOffset, wallThickness]));
-        stirPlate = stirPlate.union(nutInsert);
+        //nutInsert = nutInsert.subtract(nut14.insertHole().translate([plateHoleOffset, plateHoleOffset, wallThickness]));
+        var insertHole = nut14.insertHole().translate([plateHoleOffset, plateHoleOffset, wallThickness]);
+        stirPlate = stirPlate.union(nutInsert)
+                             .subtract(insertHole);
+
         nutInsert = nutInsert.rotateZ(90);
-        stirPlate = stirPlate.union(nutInsert);
+        insertHole = insertHole.rotateZ(90);
+        stirPlate = stirPlate.union(nutInsert)
+                             .subtract(insertHole);
+
         nutInsert = nutInsert.rotateZ(90);
-        stirPlate = stirPlate.union(nutInsert);
+        insertHole = insertHole.rotateZ(90);
+        stirPlate = stirPlate.union(nutInsert)
+                             .subtract(insertHole);
+
         nutInsert = nutInsert.rotateZ(90);
-        stirPlate = stirPlate.union(nutInsert);
+        insertHole = insertHole.rotateZ(90);
+        stirPlate = stirPlate.union(nutInsert)
+                             .subtract(insertHole);
     }
     output.push(stirPlate);
 

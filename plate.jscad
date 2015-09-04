@@ -12,9 +12,9 @@ plate = function (args)
     var plateStyle = args && args.style || 'lattice';
     var latticeAngle = args && args.latticeAngle || 30;
     var latticeCount = args && args.latticeCount || 3;
-    var latticeSize = args && args.latticeSize || 2;
-    var latticeXOffset = args && args.latticeXOffset || 0;
-    var latticeYOffset = args && args.latticeYOffset || 0;
+    var latticeSize = args && args.latticeSize || walls;
+    var latticeXOffset = args && typeof(args.latticeXOffset) != 'undefined' ? args.latticeXOffset : -((walls/2)+tolerance);
+    var latticeYOffset = args && typeof(args.latticeYOffset) != 'undefined' ? args.latticeYOffset : 0;
 
     var holeOffset = plateSize / 2;
 
@@ -32,8 +32,8 @@ plate = function (args)
     }
     else
     {
-        plate = lattice(plateSize-(rad*2), plateSize-(rad*2), latticeSize, wallThickness, latticeAngle, latticeCount, latticeXOffset, latticeYOffset)
-                    .translate([-(plateSize-(rad * 2))/2, -(plateSize-(rad * 2))/2, 0]);
+        plate = lattice(plateSize-(rad*3), plateSize-(rad*3), latticeSize, plateThickness, latticeAngle, latticeCount, latticeXOffset, latticeYOffset)
+                    .translate([-(plateSize-(rad * 3))/2, -(plateSize-(rad * 3))/2, 0]);
     }
 
     var b = [];
