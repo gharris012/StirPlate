@@ -78,11 +78,20 @@ function main(params)
 
     if ( params.plateType == "middle" )
     {
-        var motorDiameter = 30;
-        var motorSpindleDiameter = 10;
+        //// 12v 6000RPM motor
+        //var motorDiameter = 30;
+        //var motorSpindleDiameter = 10;
+        //var motorScrewDistance = 8;
+        //var screwM25 = new screw("M2.5");
+
+        // 6v 7000RPM motor
+        var motorDiameter = 25;
+        var motorSpindleDiameter = 7.0;
         var motorScrewDistance = 8;
+        var screwM25 = new screw("EG1.5");
+
         var motorMountDiameter = Math.max((motorScrewDistance + wallThickness) * 2, sparSpace / 2);
-        var screwM25 = new screw("M2.5");
+
 
         var motorMount = CSG.cylinder({
                 start: [0, 0, 0],
