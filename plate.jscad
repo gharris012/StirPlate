@@ -64,6 +64,7 @@ plate = function (args)
     var cutoutSize = (plateSize*2)-(rad*radMultiplier); // this needs some real math
     var cutout = cylinder({d: cutoutSize,
                           h: plateThickness*2,
+                          fn: 100,
                           center: [true, true, false]})
                 .translate([(cutoutSize/2)+(plateSize/2)-(rad/2)-(mountingHoleDiameter/2), 0, 0])
                 .setColor(0,0,255,0.25);

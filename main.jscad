@@ -14,7 +14,7 @@ function getParameterDefinitions()
 {
   return [
     { name: 'showReferences', type: 'choice', values: ["yes", "no"], initial: "yes", caption: "Show References?" },
-    { name: 'plateType', type: 'choice', values: ["top","middle","bottom"], initial: "middle", caption: "Plate Type" }
+    { name: 'plateType', type: 'choice', values: ["top","middle","bottom","walls"], initial: "walls", caption: "Plate Type" }
   ];
 }
 
@@ -62,9 +62,10 @@ function main(params)
             cutMountingHoles: true,
         }
     }
-    else if ( params.plateType == "bottom" )
+    else if ( params.plateType == "bottom" || params.plateType == "walls" )
     {
         var plateArgs = {
+            plateSize: 90,
             rad: ( nut14.diameter + (wallThickness * 2) ) / 2.0,
             radMultiplier: 6,
             mountingHoleDiameter: screw14.type.fit.close,
@@ -79,16 +80,16 @@ function main(params)
     if ( params.plateType == "middle" )
     {
         //// 12v 6000RPM motor
-        //var motorDiameter = 30;
-        //var motorSpindleDiameter = 10;
-        //var motorScrewDistance = 8;
-        //var screwM25 = new screw("M2.5");
+        var motorDiameter = 30;
+        var motorSpindleDiameter = 10;
+        var motorScrewDistance = 8;
+        var screwM25 = new screw("M2.5");
 
         // 6v 7000RPM motor
-        var motorDiameter = 25;
-        var motorSpindleDiameter = 7.0;
-        var motorScrewDistance = 8;
-        var screwM25 = new screw("EG1.5");
+        //var motorDiameter = 25;
+        //var motorSpindleDiameter = 7.0;
+        //var motorScrewDistance = 8;
+        //var screwM25 = new screw("EG1.5");
 
         var motorMountDiameter = Math.max((motorScrewDistance + wallThickness) * 2, sparSpace / 2);
 
@@ -148,29 +149,69 @@ function main(params)
         screwHole = screwHole.rotateZ(90);
         stirPlate = stirPlate.subtract(screwHeadRecess).subtract(screwHole);
     }
-    else if ( params.plateType == "bottom" )
+    else if ( params.plateType == "bottom" || params.plateType == "walls" )
     {
-        nut14.screw.length = nut14.height + wallThickness;
-        var nutInsert = nut14.insert().translate([plateHoleOffset, plateHoleOffset, wallThickness]);
-        //nutInsert = nutInsert.subtract(nut14.insertHole().translate([plateHoleOffset, plateHoleOffset, wallThickness]));
-        var insertHole = nut14.insertHole().translate([plateHoleOffset, plateHoleOffset, wallThickness]);
-        stirPlate = stirPlate.union(nutInsert)
-                             .subtract(insertHole);
+        //var baseWallSize = ( plateArgs.plateSize / 2 ) - plateArgs.rad - wallThickness - tol;
+        var baseWallSize = ( 150 - 20 ) / 2 / 2; // small enough to fit 8 on the 150mm build plate
+        var baseWallHeight = 30.0;
+        var baseWallThickness = 1.0;
 
-        nutInsert = nutInsert.rotateZ(90);
-        insertHole = insertHole.rotateZ(90);
-        stirPlate = stirPlate.union(nutInsert)
-                             .subtract(insertHole);
 
-        nutInsert = nutInsert.rotateZ(90);
-        insertHole = insertHole.rotateZ(90);
-        stirPlate = stirPlate.union(nutInsert)
-                             .subtract(insertHole);
+        if ( params.plateType == "bottom" ||
+                ( params.plateType == "walls" && params.showReferences === "yes" ) )
+        {
+            nut14.screw.length = nut14.height + wallThickness;
+            var nutInsert = nut14.insert().translate([plateHoleOffset, plateHoleOffset, wallThickness]);
+            //nutInsert = nutInsert.subtract(nut14.insertHole().translate([plateHoleOffset, plateHoleOffset, wallThickness]));
+            var insertHole = nut14.insertHole().translate([plateHoleOffset, plateHoleOffset, wallThickness]);
+            stirPlate = stirPlate.union(nutInsert)
+                                 .subtract(insertHole);
 
-        nutInsert = nutInsert.rotateZ(90);
-        insertHole = insertHole.rotateZ(90);
-        stirPlate = stirPlate.union(nutInsert)
-                             .subtract(insertHole);
+            nutInsert = nutInsert.rotateZ(90);
+            insertHole = insertHole.rotateZ(90);
+            stirPlate = stirPlate.union(nutInsert)
+                                 .subtract(insertHole);
+
+            nutInsert = nutInsert.rotateZ(90);
+            insertHole = insertHole.rotateZ(90);
+            stirPlate = stirPlate.union(nutInsert)
+                                 .subtract(insertHole);
+
+            nutInsert = nutInsert.rotateZ(90);
+            insertHole = insertHole.rotateZ(90);
+            stirPlate = stirPlate.union(nutInsert)
+                                 .subtract(insertHole);
+
+            var baseWallPath = new CSG.Path2D([ [baseWallSize,baseWallSize],
+                                        [-baseWallSize,baseWallSize],
+                                        [-baseWallSize,-baseWallSize],
+                                        [baseWallSize,-baseWallSize] ], /*closed=*/true);
+            var baseWall = baseWallPath.rectangularExtrude(baseWallThickness + tol, 4, 16, false)   // w, h, resolution, roundEnds
+                            .translate([0,0,plateThickness-(wallThickness/2)]);
+            stirPlate = stirPlate.subtract(baseWall);
+        }
+
+        if ( params.plateType == "walls" )
+        {
+            var wall = lattice(( baseWallSize * 2 ) + baseWallThickness, baseWallHeight, 1, 1, 45, 3);
+
+            if ( params.showReferences === "yes" )
+            {
+                wall = wall
+                    .rotateX(90)
+                    .translate([-baseWallSize,-baseWallSize,0]);
+                var walls = wall;
+                walls = walls.union(wall.rotateZ(90));
+                walls = walls.union(wall.rotateZ(180));
+                walls = walls.union(wall.rotateZ(-90).setColor(0,0,255,90));
+
+                output.push(walls);
+            }
+            else
+            {
+                stirPlate = wall;
+            }
+        }
     }
     output.push(stirPlate);
 
