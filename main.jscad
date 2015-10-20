@@ -14,7 +14,7 @@ function getParameterDefinitions()
 {
   return [
     { name: 'showReferences', type: 'choice', values: ["yes", "no"], initial: "yes", caption: "Show References?" },
-    { name: 'plateType', type: 'choice', values: ["top","middle","bottom","walls"], initial: "walls", caption: "Plate Type" }
+    { name: 'plateType', type: 'choice', values: ["top","middle","bottom","wall","wall-front"], initial: "wall-front", caption: "Plate Type" }
   ];
 }
 
@@ -149,7 +149,7 @@ function main(params)
         screwHole = screwHole.rotateZ(90);
         stirPlate = stirPlate.subtract(screwHeadRecess).subtract(screwHole);
     }
-    else if ( params.plateType == "bottom" || params.plateType == "walls" )
+    else if ( params.plateType == "bottom" || params.plateType == "wall" || params.plateType == "wall-front" )
     {
         //var baseWallSize = ( plateArgs.plateSize / 2 ) - plateArgs.rad - wallThickness - tol;
         var baseWallSize = ( 150 - 20 ) / 2 / 2; // small enough to fit 8 on the 150mm build plate
@@ -158,7 +158,7 @@ function main(params)
 
 
         if ( params.plateType == "bottom" ||
-                ( params.plateType == "walls" && params.showReferences === "yes" ) )
+                ( ( params.plateType == "wall" || params.plateType == "wall-front" ) && params.showReferences === "yes" ) )
         {
             nut14.screw.length = nut14.height + wallThickness;
             var nutInsert = nut14.insert().translate([plateHoleOffset, plateHoleOffset, wallThickness]);
@@ -191,11 +191,90 @@ function main(params)
             stirPlate = stirPlate.subtract(baseWall);
         }
 
-        if ( params.plateType == "walls" )
+        if ( params.plateType == "wall" || params.plateType == "wall-front" )
         {
-            var wall = lattice(( baseWallSize * 2 ) + baseWallThickness, baseWallHeight, 1, 1, 45, 3);
+            var wall = lattice(( baseWallSize * 2 ) - ( tol * 2 ), baseWallHeight, baseWallThickness, baseWallThickness, 45, 3);
 
-            if ( params.showReferences === "yes" )
+            // add power and aux holes
+            if ( params.plateType == 'wall-front' )
+            {
+                var pwrJackDiameter = 8.0;
+                var pwrJackOffsetWidth = ( baseWallSize * 2 ) * 0.33;
+                pwrJackOffsetWidth = pwrJackOffsetWidth + 1.30; // fluff to line up with lattice
+                var pwrJackOffsetLength = baseWallHeight / 2;
+                pwrJackDiameter = pwrJackDiameter + tol;
+
+                var pwrJackBorder = CSG.cylinder({
+                                    start: [0, 0, 0],
+                                    end:   [0, 0, baseWallThickness],
+                                    radius: ( pwrJackDiameter + ( baseWallThickness * 2 ) ) / 2
+                                }).translate([pwrJackOffsetWidth,pwrJackOffsetLength,0])
+                wall = wall.union(pwrJackBorder);
+
+                var pwrJack = CSG.cylinder({
+                                    start: [0, 0, 0],
+                                    end:   [0, 0, plateThickness],
+                                    radius: ( pwrJackDiameter ) / 2
+                                }).translate([pwrJackOffsetWidth,pwrJackOffsetLength,0])
+                wall = wall.subtract(pwrJack);
+
+                var auxJackDiameter = 6.0;
+                var auxJackOffsetWidth = ( baseWallSize * 2 ) * 0.66;
+                auxJackOffsetWidth = auxJackOffsetWidth - 0.25; // fluff to line up with lattice
+                var auxJackOffsetLength = baseWallHeight / 2;
+                auxJackOffsetLength = auxJackOffsetLength - 1.0; // fluff to line up with lattice
+                auxJackDiameter = auxJackDiameter + tol;
+
+                var auxJackBorder = CSG.cylinder({
+                                    start: [0, 0, 0],
+                                    end:   [0, 0, baseWallThickness],
+                                    radius: ( auxJackDiameter + ( baseWallThickness * 2 ) ) / 2
+                                }).translate([auxJackOffsetWidth,auxJackOffsetLength,0])
+                wall = wall.union(auxJackBorder);
+
+                var auxJack = CSG.cylinder({
+                                    start: [0, 0, 0],
+                                    end:   [0, 0, plateThickness],
+                                    radius: ( auxJackDiameter ) / 2
+                                }).translate([auxJackOffsetWidth,auxJackOffsetLength,0])
+                wall = wall.subtract(auxJack);
+
+            }
+
+            var hinge = CSG.cube({
+                            center: [baseWallThickness / 2,(baseWallHeight*0.30) / 2,baseWallThickness / 2],
+                            radius: [baseWallThickness / 2,(baseWallHeight*0.30) / 2,baseWallThickness / 2]
+                        });
+            var hingeCenterHeight = (baseWallHeight*0.40)-tol;
+            var hingeCenter = CSG.cube({
+                center: [baseWallThickness / 2,hingeCenterHeight / 2,baseWallThickness / 2],
+                radius: [baseWallThickness / 2,hingeCenterHeight / 2,baseWallThickness / 2]
+            });
+            wall = wall.translate([baseWallThickness, 0, 0]);
+
+            var hingeA = hinge.subtract(
+                           CSG.sphere({
+                            center: [baseWallThickness / 2,0,baseWallThickness / 2],
+                            radius: baseWallThickness / 3
+                        })).translate([0,( baseWallHeight - ( baseWallHeight*0.30 ) ),0]);
+            var hingeB = hingeCenter.union(
+                           CSG.sphere({
+                            center: [baseWallThickness / 2,0,baseWallThickness / 2],
+                            radius: baseWallThickness / 3
+                        })).union(
+                           CSG.sphere({
+                            center: [baseWallThickness / 2,hingeCenterHeight,baseWallThickness / 2],
+                            radius: baseWallThickness / 3
+                        })).translate([( baseWallSize * 2 ),( baseWallHeight - hingeCenterHeight ) / 2,0]);
+            var hingeC = hinge.subtract(
+                           CSG.sphere({
+                            center: [baseWallThickness / 2,(baseWallHeight*0.30),baseWallThickness / 2],
+                            radius: baseWallThickness / 3
+                        })).translate([0,baseWallHeight * 0.0,0]);
+
+            wall = wall.union([hingeA, hingeB, hingeC]);
+
+            if ( params.showReferences === "bob" )
             {
                 wall = wall
                     .rotateX(90)
