@@ -7,40 +7,46 @@
 // 17 (PF0) - Red
 // 12 (PA3) - Green
 
-byte buttonBlue = 13;
-byte buttonYellow = 18;
-byte buttonRed = 17;
-byte buttonGreen = 12;
+const byte BUTTON_COUNT = 4;
+const byte buttonDebounceDelay = 10;
 
-byte buttonBlueState = HIGH;
-byte buttonYellowState = HIGH;
-byte buttonRedState = HIGH;
-byte buttonGreenState = HIGH;
+Button buttons[BUTTON_COUNT] = {
+  { "Blue", 13, false, 0, HIGH, HIGH, 0 },
+  { "Yellow", 18, false, 0, HIGH, HIGH, 0 },
+  { "Red", 17, false, 0, HIGH, HIGH, 0 },
+  { "Green", 12, false, 0, HIGH, HIGH, 0 }
+};
+const byte BLUE = 0;
+const byte YELLOW = 1;
+const byte RED = 2;
+const byte GREEN = 3;
+
+const byte MOTOR_COUNT = 2;
+// name, motorPin, hallpin, rpm, targetRpm, maxRpm, volume, pwmVolume, lastRpmTime
+Motor motors[MOTOR_COUNT] = {
+  { "A", 7, 31, 0, 0, 9000, 0, 0, 0 },
+  { "B", 4, 8, 0, 0, 9000, 0, 0, 0 }
+};
+byte currentMotorIndex = 0;
+Motor *currentMotor = &motors[currentMotorIndex];
+
+// keep these outside the struct - need one for each motor/hall sensor
+volatile unsigned long half_revolutions_0 = 0;
+volatile unsigned long half_revolutions_1 = 0;
+byte rpmMultiplier = 30;
+word volumeIncrement = 2;
 
 // rotary encoder
-volatile static boolean rotating = false;
-volatile unsigned int encoderpos = 0;
-volatile long lastDebounceTime = 0;
-volatile long debounceDelay = 1;
-volatile boolean A_set = false;              
-volatile boolean B_set = false;
-long oldPosition;
-int volumeInc = 100;
-int volume = 0;
+volatile static boolean rotaryRotating = false;
+volatile byte rotaryPosition = 0;
+volatile long rotaryLastDebounceTime = 0;
+volatile long rotaryDebounceDelay = 1;
+volatile boolean rotaryA_set = false;              
+volatile boolean rotaryB_set = false;
+byte rotaryOldPosition;
 
 const byte pinRotaryA = 11; // PA2
 const byte pinRotaryB = 19; // PB2
-
-
-// Hall B - PA5 - 8
-// Hall A - PF4 - 31
-// motors
-const byte pinMotorA = 9;  // PA6
-const byte pinHallA = 31;  // PA5
-volatile unsigned long half_revolutionsA = 0;
-int rpmA = 0;
-int rpmMultA = 30;
-
 
 const byte pinRS = 23; // PD0
 const byte pinEN = 2;  // PB5
@@ -60,127 +66,155 @@ void setup()
   
   // put your setup code here, to run once:
   Serial.begin(9600);
-  Serial.println("StirPlate Controller v.0006");
+  Serial.println("StirPlate Controller v.0010");
   
   lcd.begin(16, 2);
   lcd.setCursor(0,0);
   
-  pinMode(buttonBlue, INPUT_PULLUP);
-  pinMode(buttonYellow, INPUT_PULLUP);
-  pinMode(buttonRed, INPUT_PULLUP);
-  pinMode(buttonGreen, INPUT_PULLUP);
+  for ( i = 0 ; i < BUTTON_COUNT ; i ++ )
+  {
+    pinMode(buttons[i].pin, INPUT_PULLUP);
+  }
+  for ( i = 0 ; i < MOTOR_COUNT ; i ++ )
+  {
+    pinMode(motors[i].hallPin, INPUT_PULLUP);
+    pinMode(motors[i].motorPin, OUTPUT);
+  }
+  attachInterrupt(motors[0].hallPin, pinHall_0_Falling, FALLING);
+  attachInterrupt(motors[1].hallPin, pinHall_1_Falling, FALLING);
   
   pinMode(pinRotaryA, INPUT_PULLUP);
   pinMode(pinRotaryB, INPUT_PULLUP);
   attachInterrupt(pinRotaryA, pinRotaryA_Change, CHANGE);
   attachInterrupt(pinRotaryB, pinRotaryB_Change, CHANGE);
-  oldPosition = encoderpos;
-  volume = 500;
-
-  pinMode(pinHallA, INPUT_PULLUP);
+  rotaryOldPosition = rotaryPosition;
 }
 
 void loop()
 {
-  // set the cursor to column 0, line 1
-  // (note: line 1 is the second row, since counting begins with 0):
-  lcd.setCursor(0, 1);
-  // print the number of seconds since reset:
-  lcd.print(millis()/1000);
+  checkButtons();
+
+  rotaryRotating = true;
+  byte rotaryNewPosition = rotaryPosition;
+  byte posDiff = ( rotaryNewPosition - rotaryOldPosition );
+  
+  if (posDiff != 0)
+  {
+    if ( posDiff < 10 )
+    {
+      if ( currentMotor->volume < 100 )
+      {
+        currentMotor->volume += volumeIncrement;
+      }
+    }
+    else if ( posDiff > 250 )
+    {
+      if ( currentMotor->volume > 0 )
+      {
+        currentMotor->volume -= volumeIncrement;
+      }
+    }
+    
+    currentMotor->volume = (byte) constrain(currentMotor->volume, 0, 100);
+    currentMotor->pwmVolume = (byte) map(currentMotor->volume, 0, 100, 0, 255);
+    currentMotor->targetRpm = (word) map(currentMotor->volume, 0, 100, 0, currentMotor->maxRpm);
+    analogWrite(currentMotor->motorPin, currentMotor->pwmVolume);
+    
+    rotaryOldPosition = rotaryNewPosition;
+    
+    lcd.setCursor(0,0);
+    sprintf(lcdBuffer, "%1s %3d%% %4d/%4d", currentMotor->name, currentMotor->volume, currentMotor->targetRpm, currentMotor->maxRpm);
+    sprintf(lcdBuffer, "%16s", lcdBuffer);
+    lcd.print(lcdBuffer);
+  }
+}
+
+void checkButtons()
+{
+  byte i;
+  byte buttonState;
 
   // check the buttons
-  byte buttonState = digitalRead(buttonBlue);
-  if ( buttonState != buttonBlueState )
+  for ( i = 0 ; i < BUTTON_COUNT ; i ++ )
   {
-    Serial.println("Blue button pressed!");
-    buttonBlueState = buttonState;
-  }
-  buttonState = digitalRead(buttonYellow);
-  if ( buttonState != buttonYellowState )
-  {
-    Serial.println("Yellow button pressed!");
-    buttonYellowState = buttonState;
-  }
-  buttonState = digitalRead(buttonRed);
-  if ( buttonState != buttonRedState )
-  {
-    Serial.println("Red button pressed!");
-    buttonRedState = buttonState;
-  }
-  buttonState = digitalRead(buttonGreen);
-  if ( buttonState != buttonGreenState )
-  {
-    Serial.println("Green button pressed!");
-    buttonGreenState = buttonState;
-  }
-  
-  rotating = true;
-  long newPosition = encoderpos;
-  unsigned int posDiff = ( newPosition - oldPosition );
-  
-  if (posDiff != 0) {
-    if ( posDiff == 1 )
+    buttonState = digitalRead(buttons[i].pin);
+    if ( buttonState != buttons[i].lastState )
     {
-      if ( volume < 7000 )
+      if ( millis() < buttons[i].debounceTime )
       {
-        volume += volumeInc;
+        buttons[i].debounceTime = millis();
+      }
+      if ( buttonState == buttons[i].debounceState )
+      {
+        if ( millis() - buttons[i].debounceTime > buttonDebounceDelay )
+        {
+          if ( buttons[i].lastState == LOW )
+          {
+            button_onPress(&buttons[i]);
+          }
+          buttons[i].lastState = buttonState;
+        }
+      }
+      else
+      {
+        buttons[i].debounceState = buttonState;
+        buttons[i].debounceTime = millis();
       }
     }
-    else if ( posDiff == 4294967295 )
+  }
+}
+
+void button_onPress(Button* button)
+{
+  button->count++;
+  Serial.println("button pressed");
+  if ( strcmp(button->name, "Blue") == 0 )
+  {
+    Serial.println("Blue button pressed");
+    currentMotorIndex++;
+    if ( currentMotorIndex >= MOTOR_COUNT )
     {
-      if ( volume > 0 )
-      {
-        volume -= volumeInc;
-      }
+      currentMotorIndex = 0;
     }
-    volume = constrain(volume, 0, 7000);
-    
-    oldPosition = newPosition;
-    
-    Serial.print("Position: ");
-    Serial.print(newPosition);
-    Serial.print(" ; Volume: ");
-    Serial.println(volume);
+    currentMotor = &motors[currentMotorIndex];
   }
-  
-  lcd.setCursor(0, 0);
-  buttonState = digitalRead(pinHallA);
-  if ( buttonState == HIGH )
-  {
-    lcd.print("HIGH");
-  }
-  else
-  {
-    lcd.print("LOW ");
-  }
-  
 }
 
 // Interrupt on RotaryA changing state
 void pinRotaryA_Change(){
   // debounce
-  if ( rotating ) delay (debounceDelay);  // wait a little until the bouncing is done
+  if ( rotaryRotating ) delay (rotaryDebounceDelay);  // wait a little until the bouncing is done
 
   // Test transition, did things really change? 
-  if( digitalRead(pinRotaryA) != A_set ) {  // debounce once more
-    A_set = !A_set;
+  if( digitalRead(pinRotaryA) != rotaryA_set ) {  // debounce once more
+    rotaryA_set = !rotaryA_set;
 
     // adjust counter + if A leads B
-    if ( A_set && !B_set ) 
-      encoderpos += 1;
+    if ( rotaryA_set && !rotaryB_set ) 
+      rotaryPosition += 1;
 
-    rotating = false;  // no more debouncing until loop() hits again
+    rotaryRotating = false;  // no more debouncing until loop() hits again
   }
 }
 // Interrupt on RotaryB changing state, same as A above
 void pinRotaryB_Change(){
-  if ( rotating ) delay (debounceDelay);
-  if( digitalRead(pinRotaryB) != B_set ) {
-    B_set = !B_set;
+  if ( rotaryRotating ) delay (rotaryDebounceDelay);
+  if( digitalRead(pinRotaryB) != rotaryB_set ) {
+    rotaryB_set = !rotaryB_set;
     //  adjust counter - 1 if B leads A
-    if( B_set && !A_set ) 
-      encoderpos -= 1;
+    if( rotaryB_set && !rotaryA_set ) 
+      rotaryPosition -= 1;
 
-    rotating = false;
+    rotaryRotating = false;
   }
+}
+
+void pinHall_0_Falling()
+{
+  half_revolutions_0++;
+}
+
+void pinHall_1_Falling()
+{
+  half_revolutions_1++;
 }

@@ -1,14 +1,30 @@
+#include <energia.h>
 #ifndef controller_h
 #define controller_h
 
-typedef struct Button // keep track of sensors
+typedef struct Button
 {
-  char name[10];
+  char name[7];
   byte pin;
-  byte state;
+  boolean pressed;
+  byte count;
   byte lastState;
-  long lastDebounceTime;
+  byte debounceState;
+  unsigned long debounceTime;
   
 } Button;
+
+typedef struct Motor
+{
+  char name[2];
+  byte motorPin;
+  byte hallPin;
+  word rpm;
+  word targetRpm;
+  word maxRpm;
+  byte volume;
+  byte pwmVolume;
+  unsigned long lastRpmTime;
+} Motor;
 
 #endif 
