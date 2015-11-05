@@ -1,3 +1,5 @@
+#include <PID_v1.h>
+
 // include the library code:
 #include <LiquidCrystal.h>
 #include "Controller.h"
@@ -16,25 +18,33 @@ Button buttons[BUTTON_COUNT] = {
   { "Red", 17, false, 0, HIGH, HIGH, 0 },
   { "Green", 12, false, 0, HIGH, HIGH, 0 }
 };
-const byte BLUE = 0;
-const byte YELLOW = 1;
-const byte RED = 2;
-const byte GREEN = 3;
 
 const byte MOTOR_COUNT = 2;
-// name, motorPin, hallpin, rpm, targetRpm, maxRpm, volume, pwmVolume, lastRpmTime
+
+const char motorMode_Manual = 'M';
+const char motorMode_Hold = 'H';
+// name, motorPin, hallpin, mode, run, changed, rpm, targetRpm, maxRpm, volume, pwmVolume, lastRpmTime
 Motor motors[MOTOR_COUNT] = {
-  { "A", 7, 31, 0, 0, 9000, 0, 0, 0 },
-  { "B", 4, 8, 0, 0, 9000, 0, 0, 0 }
+  { 'A', 7, 31, motorMode_Manual, false, true, 0, 0, 6000, 0, 0, 0 },
+  { 'B', 4, 8, motorMode_Manual, false, true, 0, 0, 6000, 0, 0, 0 }
 };
+double PIDKp=0.002, PIDKi=0.01, PIDKd=0.01;
+PID motorPID_0(&motors[0].rpm, &motors[0].pwmVolume, &motors[0].targetRpm, PIDKp, PIDKi, PIDKd, DIRECT);
+PID motorPID_1(&motors[1].rpm, &motors[1].pwmVolume, &motors[1].targetRpm, PIDKp, PIDKi, PIDKd, DIRECT);
+
+PID *motorPID[MOTOR_COUNT] = { &motorPID_0, &motorPID_1 };
+
 byte currentMotorIndex = 0;
 Motor *currentMotor = &motors[currentMotorIndex];
 
-// keep these outside the struct - need one for each motor/hall sensor
-volatile unsigned long half_revolutions_0 = 0;
-volatile unsigned long half_revolutions_1 = 0;
-byte rpmMultiplier = 30;
+// keep revolutions count outside the struct - need one for each motor/hall sensor
+volatile unsigned long motorRevolutions[MOTOR_COUNT];
+// update rpms every Count increments or after Time millis
+word rpmUpdateThresholdTime = 1000;
+byte rpmUpdateThresholdCount = 20;
+byte rpmMultiplier = 60;
 word volumeIncrement = 2;
+word rpmIncrement = 50;
 
 // rotary encoder
 volatile static boolean rotaryRotating = false;
@@ -66,7 +76,7 @@ void setup()
   
   // put your setup code here, to run once:
   Serial.begin(9600);
-  Serial.println("StirPlate Controller v.0010");
+  Serial.println("StirPlate Controller v.01");
   
   lcd.begin(16, 2);
   lcd.setCursor(0,0);
@@ -79,7 +89,11 @@ void setup()
   {
     pinMode(motors[i].hallPin, INPUT_PULLUP);
     pinMode(motors[i].motorPin, OUTPUT);
+    motorPID[i]->SetSampleTime(1000);
+    motorPID[i]->SetOutputLimits(0,255);
+    motorPID[i]->SetMode(AUTOMATIC);
   }
+  // each motor pin needs a separate interrupt
   attachInterrupt(motors[0].hallPin, pinHall_0_Falling, FALLING);
   attachInterrupt(motors[1].hallPin, pinHall_1_Falling, FALLING);
   
@@ -102,31 +116,143 @@ void loop()
   {
     if ( posDiff < 10 )
     {
-      if ( currentMotor->volume < 100 )
+      if ( currentMotor->mode == motorMode_Hold )
       {
-        currentMotor->volume += volumeIncrement;
+        if ( currentMotor->targetRpm < currentMotor->maxRpm )
+        {
+          currentMotor->targetRpm += rpmIncrement;
+        }
+      }
+      else if ( currentMotor->mode == motorMode_Manual )
+      {
+        if ( currentMotor->volume < 100 )
+        {
+          currentMotor->volume += volumeIncrement;
+        }
       }
     }
     else if ( posDiff > 250 )
     {
-      if ( currentMotor->volume > 0 )
+      if ( currentMotor->mode == motorMode_Hold )
       {
-        currentMotor->volume -= volumeIncrement;
+        if ( currentMotor->targetRpm > 0 )
+        {
+          currentMotor->targetRpm -= rpmIncrement;
+        }
+      }
+      else if ( currentMotor->mode == motorMode_Manual )
+      {
+        if ( currentMotor->volume > 0 )
+        {
+          currentMotor->volume -= volumeIncrement;
+        }
       }
     }
     
-    currentMotor->volume = (byte) constrain(currentMotor->volume, 0, 100);
-    currentMotor->pwmVolume = (byte) map(currentMotor->volume, 0, 100, 0, 255);
-    currentMotor->targetRpm = (word) map(currentMotor->volume, 0, 100, 0, currentMotor->maxRpm);
-    analogWrite(currentMotor->motorPin, currentMotor->pwmVolume);
+    if ( currentMotor->mode == motorMode_Hold )
+    {
+      currentMotor->targetRpm = (word) constrain(currentMotor->targetRpm, 0, currentMotor->maxRpm);
+    }
+    else if ( currentMotor->mode == motorMode_Manual )
+    {
+      currentMotor->volume = (byte) constrain(currentMotor->volume, 0, 100);
+    }
+    
+    currentMotor->changed = true;
     
     rotaryOldPosition = rotaryNewPosition;
-    
-    lcd.setCursor(0,0);
-    sprintf(lcdBuffer, "%1s %3d%% %4d/%4d", currentMotor->name, currentMotor->volume, currentMotor->targetRpm, currentMotor->maxRpm);
-    sprintf(lcdBuffer, "%16s", lcdBuffer);
-    lcd.print(lcdBuffer);
   }
+  char state;
+  char mode;
+  word maxRpm;
+  byte i;
+  for ( i = 0 ; i < MOTOR_COUNT ; i ++ )
+  {
+    // figure out current rpm
+    // reset timer if millis overflows
+    if ( motors[i].lastRpmTime > millis() )
+    {
+      motors[i].lastRpmTime = millis();
+    }
+    if ( motorRevolutions[i] > rpmUpdateThresholdCount || ( millis() - motors[i].lastRpmTime ) > rpmUpdateThresholdTime )
+    {
+      detachInterrupt(motors[i].hallPin);
+      double rpm = ( rpmMultiplier* 1000 ) / ( millis() - motors[i].lastRpmTime ) * motorRevolutions[i];
+      motorRevolutions[i] = 0;
+      motors[i].lastRpmTime = millis();
+      // NOTE: need clause for each motor!
+      if ( i == 0 )
+      {
+        attachInterrupt(motors[i].hallPin, pinHall_0_Falling, FALLING);
+      }
+      else if ( i == 1 )
+      {
+        attachInterrupt(motors[i].hallPin, pinHall_1_Falling, FALLING);
+      }
+      if ( motors[i].rpm != rpm )
+      {
+        // smooth out the fluctuations a little
+        motors[i].changed = true;
+        motors[i].rpm = ( rpm + motors[i].rpm ) / 2;
+      }
+    }
+    
+    if ( motors[i].changed )
+    {
+      if ( motors[i].run )
+      {
+        if ( motors[i].mode == motorMode_Manual )
+        {
+          motors[i].pwmVolume = (byte) map(motors[i].volume, 0, 100, 0, 255);
+        }
+        else
+        {
+          // math out pwmVolume based on current rpm and targetRpm
+          //   and update volume based on pwmVolume
+          // for now just use rotary volume
+          motorPID[i]->Compute();
+          motors[i].volume = (byte) map(motors[i].pwmVolume, 0, 255, 0, 100);
+        }
+        analogWrite(motors[i].motorPin, motors[i].pwmVolume);
+      }
+      else
+      {
+        analogWrite(motors[i].motorPin, 0);
+      }
+      if ( currentMotorIndex == i )
+      {
+        state = '*';
+      }
+      else
+      {
+        state = ' ';
+      }
+      if ( motors[i].run )
+      {
+        mode = motors[i].mode;
+      }
+      else
+      {
+        mode = tolower(motors[i].mode);
+      }
+      if ( motors[i].mode == motorMode_Manual )
+      {
+        maxRpm = motors[i].maxRpm;
+      }
+      else if ( motors[i].mode == motorMode_Hold )
+      {
+        maxRpm = motors[i].targetRpm;
+      }
+      lcd.setCursor(0,i);
+      Serial.println(state);
+      sprintf(lcdBuffer, "%c%c%3d %4.0f/%4d%c", motors[i].name, state, motors[i].volume, motors[i].rpm, maxRpm, mode);
+      sprintf(lcdBuffer, "%16s", lcdBuffer);
+      lcd.print(lcdBuffer);
+      
+      motors[i].changed = false;
+    }
+  }
+  
 }
 
 void checkButtons()
@@ -167,16 +293,52 @@ void checkButtons()
 void button_onPress(Button* button)
 {
   button->count++;
-  Serial.println("button pressed");
   if ( strcmp(button->name, "Blue") == 0 )
   {
     Serial.println("Blue button pressed");
+    currentMotor->changed = true;
     currentMotorIndex++;
     if ( currentMotorIndex >= MOTOR_COUNT )
     {
       currentMotorIndex = 0;
     }
     currentMotor = &motors[currentMotorIndex];
+    currentMotor->changed = true;
+    Serial.println(currentMotorIndex);
+  }
+  else if ( strcmp(button->name, "Red") == 0 )
+  {
+    Serial.println("Red button pressed");
+    // if we are already stopped, clear the volume
+    if ( currentMotor->run == false )
+    {
+      currentMotor->volume = 0;
+      currentMotor->targetRpm = 0;
+    }
+    currentMotor->run = false;
+    currentMotor->changed = true;
+  }
+  else if ( strcmp(button->name, "Green") == 0 )
+  {
+    Serial.println("Green button pressed");
+    currentMotor->run = true;
+    currentMotor->changed = true;
+  }
+  else if ( strcmp(button->name, "Yellow") == 0 )
+  {
+    Serial.println("Yellow button pressed");
+    // rotate through the modes: Manual,Hold
+    if ( currentMotor->mode == motorMode_Manual && currentMotor->run )
+    {
+      currentMotor->mode = motorMode_Hold;
+      currentMotor->targetRpm = ( currentMotor->rpm / 50 ) * 50;
+    }
+    else
+    {
+      currentMotor->mode = motorMode_Manual;
+      currentMotor->targetRpm = 0;
+    }
+    currentMotor->changed = true;
   }
 }
 
@@ -211,10 +373,10 @@ void pinRotaryB_Change(){
 
 void pinHall_0_Falling()
 {
-  half_revolutions_0++;
+  motorRevolutions[0]++;
 }
 
 void pinHall_1_Falling()
 {
-  half_revolutions_1++;
+  motorRevolutions[1]++;
 }

@@ -16,14 +16,17 @@ typedef struct Button
 
 typedef struct Motor
 {
-  char name[2];
+  char name;
   byte motorPin;
   byte hallPin;
-  word rpm;
-  word targetRpm;
+  char mode;
+  boolean run;
+  boolean changed;
+  double rpm;
+  double targetRpm;
   word maxRpm;
   byte volume;
-  byte pwmVolume;
+  double pwmVolume;
   unsigned long lastRpmTime;
 } Motor;
 
