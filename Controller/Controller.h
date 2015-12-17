@@ -27,7 +27,19 @@ typedef struct Motor
   word maxRpm;
   byte volume;
   double pwmVolume;
+  double maxVolume;
   unsigned long lastRpmTime;
+  char settingMode[10];
+  char settingRpm[10];
+  char settingRun[10];
 } Motor;
+
+typedef struct Setting
+{
+  char name[10];
+  byte value;
+  byte eeValue;
+  byte eeAddress;
+} Setting;
 
 #endif 
