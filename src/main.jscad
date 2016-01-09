@@ -14,7 +14,7 @@ function getParameterDefinitions()
 {
   return [
     { name: 'showReferences', type: 'choice', values: ["yes", "no"], initial: "yes", caption: "Show References?" },
-    { name: 'plateType', type: 'choice', values: ["top","middle","bottom","conn"], initial: "conn", caption: "Plate Type" }
+    { name: 'plateType', type: 'choice', values: ["top","middle","bottom","conn","face"], initial: "conn", caption: "Plate Type" }
   ];
 }
 
@@ -62,7 +62,7 @@ function main(params)
             cutMountingHoles: true,
         }
     }
-    else if ( params.plateType == "bottom" || params.plateType == "conn" )
+    else if ( params.plateType == "bottom" || params.plateType == "conn" || params.plateType == "face" )
     {
         var plateArgs = {
             plateSize: 90,
@@ -149,51 +149,81 @@ function main(params)
         screwHole = screwHole.rotateZ(90);
         stirPlate = stirPlate.subtract(screwHeadRecess).subtract(screwHole);
     }
-    else if ( params.plateType == "bottom" || params.plateType == "conn" )
+    else if ( params.plateType == "bottom" || params.plateType == "conn" || params.plateType == "face" )
     {
-        if ( params.plateType == "bottom" ||
-                ( params.plateType == "conn" && params.showReferences === "yes" ) )
+        if ( params.plateType == "bottom"
+                || ( params.plateType == "conn" && params.showReferences === "yes" )
+                || ( params.plateType == "face" && params.showReferences === "yes" ) )
         {
-            nut14.screw.length = nut14.height + wallThickness;
-            var nutInsert = nut14.insert().translate([plateHoleOffset, plateHoleOffset, wallThickness]);
-            //nutInsert = nutInsert.subtract(nut14.insertHole().translate([plateHoleOffset, plateHoleOffset, wallThickness]));
-            var insertHole = nut14.insertHole().translate([plateHoleOffset, plateHoleOffset, wallThickness]);
-            stirPlate = stirPlate.union(nutInsert)
+            var insertPost = screw14.roundThreadedInsertPost().translate([plateHoleOffset, plateHoleOffset, wallThickness]);
+            var insertHole = screw14.threadedInsertHole({"flipX":true}).translate([plateHoleOffset, plateHoleOffset, wallThickness]);
+            stirPlate = stirPlate.union(insertPost);
+            stirPlate = stirPlate.subtract(insertHole);
+
+            insertPost = insertPost.rotateZ(90);
+            insertHole = insertHole.rotateZ(90);
+            stirPlate = stirPlate.union(insertPost)
+                                 .subtract(insertHole);
+            insertPost = insertPost.rotateZ(90);
+            insertHole = insertHole.rotateZ(90);
+            stirPlate = stirPlate.union(insertPost)
+                                 .subtract(insertHole);
+            insertPost = insertPost.rotateZ(90);
+            insertHole = insertHole.rotateZ(90);
+            stirPlate = stirPlate.union(insertPost)
                                  .subtract(insertHole);
 
-            nutInsert = nutInsert.rotateZ(90);
-            insertHole = insertHole.rotateZ(90);
-            stirPlate = stirPlate.union(nutInsert)
-                                 .subtract(insertHole);
-
-            nutInsert = nutInsert.rotateZ(90);
-            insertHole = insertHole.rotateZ(90);
-            stirPlate = stirPlate.union(nutInsert)
-                                 .subtract(insertHole);
-
-            nutInsert = nutInsert.rotateZ(90);
-            insertHole = insertHole.rotateZ(90);
-            stirPlate = stirPlate.union(nutInsert)
-                                 .subtract(insertHole);
         }
 
-        if ( params.plateType == "conn" )
+        if ( params.plateType == "face" || params.plateType == "conn" )
         {
-            var pwrJackDiameter = 8.0;
-            var pwrJackClearanceDiameter = 13.0;
-            var auxJackDiameter = 6.0;
-            var auxJackClearanceDiameter = 10.0;
-
-            pwrJackDiameter = pwrJackDiameter + tol;
-            auxJackDiameter = auxJackDiameter + tol;
-
-            var wallExpansion = 0.2;
+            var connWallExpansion = 0.2;
             var connWallThickness = 2.0;
-            connWallThickness = connWallThickness - ( wallExpansion * 2 );
-            var connWallWidth = pwrJackDiameter + auxJackDiameter + ( connWallThickness * 3 ); // just big enough to fit both connectors
-            connWallWidth = Math.max(connWallWidth, pwrJackClearanceDiameter + auxJackClearanceDiameter);
-            var connWallHeight = Math.max(pwrJackDiameter,auxJackDiameter) + ( connWallThickness * 2 );
-            connWallHeight = Math.max(connWallHeight, pwrJackClearanceDiameter, auxJackClearanceDiameter);
+            var connWallWidth = 0;
+            var connWallHeight = 0;
+            var connWallClearance = 5.0; // min spacing between items
+
+            var connWallWidthMax = ( ( ( plateArgs.plateSize / 2 ) - plateArgs.rad ) * 2 ) - connWallThickness;
+
+            connWallThickness = connWallThickness - ( connWallExpansion * 2 );
+
+            // set up initial sizes
+            if ( params.plateType == "conn" )
+            {
+                var pwrJackDiameter = 8.0;
+                var pwrJackClearanceDiameter = 13.0;
+                var auxJackDiameter = 6.0;
+                var auxJackClearanceDiameter = 10.0;
+
+                pwrJackDiameter = pwrJackDiameter + tol;
+                auxJackDiameter = auxJackDiameter + tol;
+
+                connWallWidth = pwrJackDiameter + auxJackDiameter + ( connWallThickness * 3 ); // just big enough to fit both connectors
+                connWallWidth = Math.max(connWallWidth, pwrJackClearanceDiameter + auxJackClearanceDiameter);
+                connWallHeight = Math.max(pwrJackDiameter,auxJackDiameter) + ( connWallThickness * 2 );
+                connWallHeight = Math.max(connWallHeight, pwrJackClearanceDiameter, auxJackClearanceDiameter);
+            }
+            if ( params.plateType == "face" )
+            {
+                var ledDiameter = 5.0;
+                var ledOffset = 5.0;
+                var potDiameter = 7.0;
+                var potBaseDiameter = 16.0;  // base is big
+                var switchWidth = 7.0;
+                var switchHeight = 19.0;
+                var switchOverlap = 1.5;     // plastic overhang in the front
+
+                connWallWidth = ( ( ledDiameter + connWallClearance ) * 3 )
+                                + potBaseDiameter + connWallClearance
+                                + switchHeight + ( switchOverlap * 2 ) + connWallClearance;
+                connWallHeight = switchHeight + ( switchOverlap * 2 )
+                                + ( connWallThickness * 2 )
+            }
+
+            connWallWidth = Math.min(connWallWidth, connWallWidthMax);
+
+            var supportLength =  Math.min(connWallWidth / 4, 10);
+            supportLength = Math.max(supportLength, 5);
 
             var wall = CSG.cube({
                             center: [connWallWidth / 2,connWallThickness / 2, connWallHeight / 2],
@@ -201,42 +231,83 @@ function main(params)
                         }).translate([0,0,plateThickness]);
             var wallSupport = CSG.cube({
                             center: [0,0,0],
-                            radius: [connWallWidth / 4,connWallThickness / 2, connWallHeight / 2]
+                            radius: [supportLength / 2,connWallThickness / 2, connWallHeight / 2]
                         })
                         .rotateZ(90)
-                        .translate([connWallThickness / 2, connWallWidth / 4, ( connWallHeight / 2 ) + plateThickness]);
+                        .translate([connWallThickness / 2, supportLength / 2, ( connWallHeight / 2 ) + plateThickness]);
 
             wall = wall.union(wallSupport);
             wall = wall.union(wallSupport.translate([connWallWidth,0,0]));
 
-            wall = wall.expand(wallExpansion, 8).subtract(stirPlate);
-            connWallThickness = connWallThickness + ( wallExpansion * 2 );
+            wall = wall.expand(connWallExpansion, 8);
+            // get rid of the expansion on the bottom
+            wall = wall.translate([-connWallWidth / 2,0,0]).subtract(stirPlate);
+            wall = wall.translate([connWallWidth / 2,0,0]);
 
-            var pwrJackOffsetWidth = connWallThickness + ( pwrJackClearanceDiameter / 2 );
-            var pwrJackOffsetHeight = pwrJackClearanceDiameter / 2;
+            if ( params.plateType == "face" )
+            {
+                var ledHole = CSG.cylinder({
+                                    start: [0, 0, 0],
+                                    end:   [0, 0, connWallThickness * 2],
+                                    radius: ( ledDiameter ) / 2
+                                })
+                                .rotateX(90)
+                                .translate([0,connWallThickness + tol,plateThickness]);
 
-            var pwrJack = CSG.cylinder({
-                                start: [0, 0, 0],
-                                end:   [0, 0, plateThickness],
-                                radius: ( pwrJackDiameter ) / 2
-                            })
-                            .rotateX(90)
-                            .translate([0,connWallThickness,plateThickness])
-                            .translate([pwrJackOffsetWidth,0,pwrJackOffsetHeight])
-            wall = wall.subtract(pwrJack);
+                ledHole = ledHole.translate([ledDiameter / 2 + connWallClearance,0,connWallHeight - connWallClearance - ( ledDiameter / 2 ) ]);
+                wall = wall.subtract(ledHole);
+                ledHole = ledHole.translate([ledDiameter + connWallClearance,0,0]);
+                wall = wall.subtract(ledHole);
+                ledHole = ledHole.translate([ledDiameter + connWallClearance,0,0]);
+                wall = wall.subtract(ledHole);
 
-            var auxJackOffsetWidth = connWallWidth - ( auxJackClearanceDiameter / 2 );
-            var auxJackOffsetHeight = connWallHeight / 2;
+                var powerSwitchOffset = switchWidth + switchOverlap + connWallClearance;
+                var powerSwitch = CSG.cube({
+                            center: [switchWidth / 2,plateThickness / 2, switchHeight / 2],
+                            radius: [switchWidth / 2,plateThickness / 2, switchHeight / 2]
+                        }).translate([connWallWidth - powerSwitchOffset,-tol,plateThickness + ( ( connWallHeight - switchHeight ) / 2 ) ]);
+                wall = wall.subtract(powerSwitch);
 
-            var auxJack = CSG.cylinder({
-                                start: [0, 0, 0],
-                                end:   [0, 0, plateThickness],
-                                radius: ( auxJackDiameter ) / 2
-                            })
-                            .rotateX(90)
-                            .translate([0,connWallThickness,plateThickness])
-                            .translate([auxJackOffsetWidth,0,auxJackOffsetHeight])
-            wall = wall.subtract(auxJack);
+                var potHole = CSG.cylinder({
+                                    start: [0, 0, 0],
+                                    end:   [0, 0, connWallThickness * 2],
+                                    radius: ( potDiameter ) / 2
+                                })
+                                .rotateX(90)
+                                .translate([0,connWallThickness + tol,plateThickness]);
+                potHole = potHole.translate([connWallWidth - powerSwitchOffset - connWallClearance - ( potBaseDiameter / 2 ),0,( ( connWallHeight - potBaseDiameter ) / 2 ) + ( potBaseDiameter / 2 )]);
+                wall = wall.subtract(potHole);
+            }
+
+            if ( params.plateType == "conn" )
+            {
+                var pwrJackOffsetWidth = connWallThickness + ( pwrJackClearanceDiameter / 2 );
+                var pwrJackOffsetHeight = pwrJackClearanceDiameter / 2;
+
+                var pwrJack = CSG.cylinder({
+                                    start: [0, 0, 0],
+                                    end:   [0, 0, plateThickness],
+                                    radius: ( pwrJackDiameter ) / 2
+                                })
+                                .rotateX(90)
+                                .translate([0,connWallThickness + tol,plateThickness])
+                                .translate([pwrJackOffsetWidth,0,pwrJackOffsetHeight])
+                wall = wall.subtract(pwrJack);
+
+                var auxJackOffsetWidth = connWallWidth - ( auxJackClearanceDiameter / 2 );
+                var auxJackOffsetHeight = connWallHeight / 2;
+
+                var auxJack = CSG.cylinder({
+                                    start: [0, 0, 0],
+                                    end:   [0, 0, plateThickness],
+                                    radius: ( auxJackDiameter ) / 2
+                                })
+                                .rotateX(90)
+                                .translate([0,connWallThickness + tol,plateThickness])
+                                .translate([auxJackOffsetWidth,0,auxJackOffsetHeight])
+                wall = wall.subtract(auxJack);
+                wall = wall.union(wall.translate([-connWallWidth,0,0]));
+            }
 
             if ( params.showReferences === "yes" )
             {
