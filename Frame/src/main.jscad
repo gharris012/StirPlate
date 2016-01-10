@@ -14,7 +14,7 @@ function getParameterDefinitions()
 {
   return [
     { name: 'showReferences', type: 'choice', values: ["yes", "no"], initial: "yes", caption: "Show References?" },
-    { name: 'plateType', type: 'choice', values: ["top","middle","bottom","conn","face"], initial: "conn", caption: "Plate Type" }
+    { name: 'plateType', type: 'choice', values: ["top","middle","bottom","conn","face"], initial: "middle", caption: "Part" }
   ];
 }
 
@@ -55,7 +55,7 @@ function main(params)
             radMultiplier: 1,
             mountingHoleDiameter: screw14.type.fit.free,
             plateThickness: plateThickness,
-            style: 'lattice',
+            style: 'solid',
             latticeAngle: 33.5,
             latticeCount: 3,
             latticeXOffset: -1.20,
@@ -80,19 +80,32 @@ function main(params)
     if ( params.plateType == "middle" )
     {
         //// 12v 6000RPM motor
-        var motorDiameter = 30;
-        var motorSpindleDiameter = 10;
-        var motorScrewDistance = 8;
-        var screwM25 = new screw("M2.5");
+        //var motorDiameter = 30;
+        //var motorSpindleDiameter = 10;
+        //var motorScrewDistance = 8;
+        //var screwMotorMount = new screw("M2.5");
 
         // 6v 7000RPM motor
         //var motorDiameter = 25;
         //var motorSpindleDiameter = 7.0;
         //var motorScrewDistance = 8;
-        //var screwM25 = new screw("EG1.5");
+        //var screwMotorMount = new screw("EG1.5");
 
-        var motorMountDiameter = Math.max((motorScrewDistance + wallThickness) * 2, sparSpace / 2);
+        // 12v Nidec 22H
+        var motorDiameter = 36;
+        var motorSpindleDiameter = 13.0;
+        var motorScrewDistance = 25 / 2;
+        var screwMotorMount = new screw("M3");
 
+        var motorMountDiameter = 0;
+        if ( plateArgs.style == 'lattice' && sparSpace )
+        {
+            motorMountDiameter = Math.max((motorScrewDistance + wallThickness) * 2, sparSpace / 2);
+        }
+        else
+        {
+            motorMountDiameter = ( motorScrewDistance + wallThickness) * 2;
+        }
 
         var motorMount = CSG.cylinder({
                 start: [0, 0, 0],
@@ -105,8 +118,8 @@ function main(params)
                                     end:   [0, 0, plateThickness],
                                     radius: ( ( motorSpindleDiameter + tol ) / 2 )
                                 }))
-                             .subtract(screwM25.hole({length:plateThickness}).translate([motorScrewDistance,0,0]))
-                             .subtract(screwM25.hole({length:plateThickness}).translate([-motorScrewDistance,0,0]));
+                             .subtract(screwMotorMount.hole({length:plateThickness}).translate([motorScrewDistance,0,0]))
+                             .subtract(screwMotorMount.hole({length:plateThickness}).translate([-motorScrewDistance,0,0]));
     }
     else if ( params.plateType == "top" )
     {
