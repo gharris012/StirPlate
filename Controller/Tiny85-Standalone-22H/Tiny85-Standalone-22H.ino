@@ -14,8 +14,8 @@ const byte POT = A2;
 const byte LED_SPEED = 0;
 
 // convert max % to max pwm
-const byte MIN_PWM = 20;
-const byte MAX_PWM = 170;
+const byte MIN_PWM = 10;
+const byte MAX_PWM = 70;
 
 const byte SAMPLE_COUNT = 10;
 
@@ -54,15 +54,16 @@ void loop()
   }
   in = in / SAMPLE_COUNT;
   // convert to a pwm value
-  out = map(in, 0, 1023, MIN_PWM - 5, MAX_PWM);
+  out = map(in, 0, 1023, MIN_PWM - 1, MAX_PWM);
 
   // reverse out -- pot hooked up backwards
   //out = ( 255 - out );
 
-  // turn on/off motor if above/below min volume %
+  // turn on/off motor if above/below min
   if ( out <= MIN_PWM )
   {
     digitalWrite(MOTOR_START, LOW);
+    
   }
   else
   {
@@ -71,5 +72,5 @@ void loop()
     OCR0B = out;
   }
   // PB0 (LED)
-  OCR0A = out - MIN_PWM;
+  OCR0A = out;
 }
