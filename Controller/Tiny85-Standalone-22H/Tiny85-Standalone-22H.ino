@@ -30,9 +30,13 @@ void setup()
   DDRB = 1<<DDB1 | 1<<DDB0;
   // clear OCOA and OCOB on compare-match, set at bottom
   // enable fast-pwm
-  TCCR0A = 2<<COM0A0 | 2<<COM0B0 | 3<<WGM00;
+  //TCCR0A = 2<<COM0A0 | 2<<COM0B0 | 3<<WGM00;
   // enable fast-pwm
   // do not use a prescaler
+  //TCCR0B = 0<<WGM02 | 1<<CS00;
+
+  // phase-correct pwm, no prescaler
+  TCCR0A = 2<<COM0A0 | 2<<COM0B0 | 1<<WGM00;
   TCCR0B = 0<<WGM02 | 1<<CS00;
 
   digitalWrite(MOTOR_START, LOW);
