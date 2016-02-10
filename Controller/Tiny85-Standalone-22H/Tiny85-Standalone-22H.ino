@@ -8,7 +8,6 @@
  *                   +-------+
  */
 
- 
 const byte MOTOR_PWM = 1;
 const byte MOTOR_START = 2;
 const byte POT = A2;
@@ -20,16 +19,28 @@ const byte MAX_PWM = 170;
 
 const byte SAMPLE_COUNT = 10;
 
+// pwm info from http://matt16060936.blogspot.co.uk/2012/04/attiny-pwm.html
+
 void setup()
 {
-  pinMode(MOTOR_PWM, OUTPUT);
   pinMode(MOTOR_START, OUTPUT);
   pinMode(POT, INPUT);
-  pinMode(LED_SPEED, OUTPUT);
 
-  digitalWrite(LED_SPEED, LOW);
-  digitalWrite(MOTOR_PWM, LOW);
+  // set PB0, PB1 to output mode
+  DDRB = 1<<DDB1 | 1<<DDB0;
+  // clear OCOA and OCOB on compare-match, set at bottom
+  // enable fast-pwm
+  TCCR0A = 2<<COM0A0 | 2<<COM0B0 | 3<<WGM00;
+  // enable fast-pwm
+  // do not use a prescaler
+  TCCR0B = 0<<WGM02 | 1<<CS00;
+
   digitalWrite(MOTOR_START, LOW);
+
+  // PB1 (Motor)
+  OCR0B = 0;
+  // PB0 (LED)
+  OCR0A = 0;
 }
 
 void loop()
@@ -56,7 +67,9 @@ void loop()
   else
   {
     digitalWrite(MOTOR_START, HIGH);
-    analogWrite(MOTOR_PWM, out);
+    // PB1 (Motor)
+    OCR0B = out;
   }
-  analogWrite(LED_SPEED, out - MIN_PWM);
+  // PB0 (LED)
+  OCR0A = out - MIN_PWM;
 }
